@@ -34,5 +34,14 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+      'hikvision' => [
+        'ip'       => env('HIKVISION_DEVICE_IP'),
+        'username' => env('HIKVISION_USERNAME'),
+        'password' => env('HIKVISION_PASSWORD'),
+    ],
+
+    'bitrix24' => [
+        'webhook_url' => env('BITRIX24_WEBHOOK_URL'),
+    ],
 
 ];
