@@ -27,7 +27,7 @@ class BitrixEmployeeService
             $start = 0;
 
             do {
-                $response = Http::get($this->webhookUrl . 'user.get', [
+                $response = Http::retry(3, 200)->get($this->webhookUrl . 'user.get', [
                     'FILTER' => [
                         'ACTIVE' => true,
                     ],

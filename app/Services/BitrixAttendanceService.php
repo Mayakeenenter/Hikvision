@@ -57,7 +57,7 @@ class BitrixAttendanceService
         }
         // ───────────────────────────────────────────────────────────────────────
 
-        $response = Http::post($this->webhookUrl . 'lists.element.add', [
+        $response = Http::retry(3, 200)->post($this->webhookUrl . 'lists.element.add', [
             'IBLOCK_TYPE_ID' => $this->IBLOCK_TYPE_ID,
             'IBLOCK_ID'      => $this->IBLOCK_ID,
             'ELEMENT_CODE'   => 'event_' . ($eventId ?? uniqid()),

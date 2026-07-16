@@ -18,31 +18,54 @@ class HikvisionService
     }
 
     /**
-     * Send an HTTP request to the Hikvision device using Digest authentication.
+     * Send an HTTP request to the Hikvision device using Digest authentication with retry logic.
      */
-    protected function callDevice(string $url, string $method = 'GET', ?array $body = null): array
+    protected function callDevice(string $url, string $method = 'GET', ?array $body = null, int $retries = 3, int $delaySeconds = 1): array
     {
-        $ch = \curl_init($url);
-        curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_DIGEST);
-        curl_setopt($ch, CURLOPT_USERPWD, "{$this->username}:{$this->password}");
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        for ($attempt = 1; $attempt <= $retries; $attempt++) {
+            $ch = \curl_init($url);
+            curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_DIGEST);
+            curl_setopt($ch, CURLOPT_USERPWD, "{$this->username}:{$this->password}");
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
 
-        if ($method === 'POST') {
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            if ($method === 'POST') {
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+                curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            }
+
+            $response = curl_exec($ch);
+            $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error     = curl_error($ch);
+            curl_close($ch);
+
+            $result = [
+                'httpCode' => $httpCode,
+                'error'    => $error,
+                'response' => $response,
+            ];
+
+            if (!$error && $httpCode === 200) {
+                return $result;
+            }
+
+            if ($attempt < $retries) {
+                Log::warning("Hikvision connection failed (attempt {$attempt} of {$retries}). Retrying in {$delaySeconds}s...", [
+                    'url'      => $url,
+                    'httpCode' => $httpCode,
+                    'error'    => $error,
+                ]);
+                sleep($delaySeconds);
+            } else {
+                return $result;
+            }
         }
 
-        $response = curl_exec($ch);
-        $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error     = curl_error($ch);
-        curl_close($ch);
-
         return [
-            'httpCode' => $httpCode,
-            'error'    => $error,
-            'response' => $response,
+            'httpCode' => 0,
+            'error'    => 'Unknown failure after retries',
+            'response' => null,
         ];
     }
 

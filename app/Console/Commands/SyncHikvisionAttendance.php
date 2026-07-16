@@ -25,67 +25,108 @@ class SyncHikvisionAttendance extends Command
     {
         $this->info('Starting sync...');
 
-        if (! $hikvision->checkDeviceInfo()) {
-            $this->error('Could not connect to Hikvision device. Check the IP address or credentials.');
-            return self::FAILURE;
-        }
+        $syncLog = \App\Models\SyncLog::create([
+            'status' => 'running',
+            'started_at' => now(),
+        ]);
 
-        // ── Dynamic time window ─────────────────────────────────────────────
-        // Read the timestamp of the last successful sync from cache.
-        // If no previous run is recorded (e.g. first run, or cache was cleared)
-        // fall back to 24 hours ago so we don't miss any records.
-        $lastSyncAt = Cache::get(self::LAST_SYNC_CACHE_KEY);
-
-        $endTime   = now('Asia/Dubai');
-        $startTime = $lastSyncAt
-            ? \Carbon\Carbon::parse($lastSyncAt, 'Asia/Dubai')
-            : $endTime->copy()->subDay();
-
-        $this->info('Sync window: ' . $startTime->toIso8601String() . ' → ' . $endTime->toIso8601String());
-
-        $events = $hikvision->fetchAttendanceEvents(
-            $startTime->format('Y-m-d\TH:i:sP'),
-            $endTime->format('Y-m-d\TH:i:sP'),
-        );
-        // ───────────────────────────────────────────────────────────────────────
-
-        if ($events === null) {
-            $this->error('Failed to retrieve attendance records from Hikvision.');
-            return self::FAILURE;
-        }
-
-        if (empty($events)) {
-            $this->warn('No attendance records found in the given time range.');
-            return self::SUCCESS;
-        }
-
-        $total       = count($events);
-        $sentCount   = 0;
-        $failedCount = 0;
-
-        $this->info("Fetched {$total} records. Matching and sending to Bitrix24...");
-
-        foreach ($events as $event) {
-            if ($bitrix->sendAttendanceEvent($event)) {
-                $sentCount++;
-            } else {
-                $failedCount++;
+        try {
+            if (! $hikvision->checkDeviceInfo()) {
+                $this->error('Could not connect to Hikvision device. Check the IP address or credentials.');
+                $syncLog->update([
+                    'status' => 'failed',
+                    'ended_at' => now(),
+                    'error_message' => 'Could not connect to Hikvision device. Check the IP address or credentials.',
+                ]);
+                return self::FAILURE;
             }
+
+            // ── Dynamic time window ─────────────────────────────────────────────
+            // Read the timestamp of the last successful sync from cache.
+            // If no previous run is recorded (e.g. first run, or cache was cleared)
+            // fall back to 24 hours ago so we don't miss any records.
+            $lastSyncAt = Cache::get(self::LAST_SYNC_CACHE_KEY);
+
+            $endTime   = now('Asia/Dubai');
+            $startTime = $lastSyncAt
+                ? \Carbon\Carbon::parse($lastSyncAt, 'Asia/Dubai')
+                : $endTime->copy()->subDay();
+
+            $this->info('Sync window: ' . $startTime->toIso8601String() . ' → ' . $endTime->toIso8601String());
+
+            $events = $hikvision->fetchAttendanceEvents(
+                $startTime->format('Y-m-d\TH:i:sP'),
+                $endTime->format('Y-m-d\TH:i:sP'),
+            );
+            // ───────────────────────────────────────────────────────────────────────
+
+            if ($events === null) {
+                $this->error('Failed to retrieve attendance records from Hikvision.');
+                $syncLog->update([
+                    'status' => 'failed',
+                    'ended_at' => now(),
+                    'error_message' => 'Failed to retrieve attendance records from Hikvision.',
+                ]);
+                return self::FAILURE;
+            }
+
+            if (empty($events)) {
+                $this->warn('No attendance records found in the given time range.');
+                $syncLog->update([
+                    'status' => 'success',
+                    'ended_at' => now(),
+                    'total_records' => 0,
+                    'sent_records' => 0,
+                    'failed_records' => 0,
+                ]);
+                return self::SUCCESS;
+            }
+
+            $total       = count($events);
+            $sentCount   = 0;
+            $failedCount = 0;
+
+            $this->info("Fetched {$total} records. Matching and sending to Bitrix24...");
+
+            foreach ($events as $event) {
+                if ($bitrix->sendAttendanceEvent($event)) {
+                    $sentCount++;
+                } else {
+                    $failedCount++;
+                }
+            }
+
+            $this->info("✓ Successfully sent {$sentCount} of {$total} records.");
+
+            if ($failedCount > 0) {
+                $this->warn("⚠ {$failedCount} record(s) were not sent (duplicate or no employee match). Check storage/logs/laravel.log for details.");
+            }
+
+            // ── Persist successful sync timestamp ───────────────────────────────
+            // Store the end-time of this run so the next scheduled run knows
+            // exactly where to pick up from. Keep for 7 days to survive restarts.
+            Cache::put(self::LAST_SYNC_CACHE_KEY, $endTime->toIso8601String(), now()->addDays(7));
+            $this->info('Last-sync timestamp updated: ' . $endTime->toIso8601String());
+            // ───────────────────────────────────────────────────────────────────────
+
+            $syncLog->update([
+                'status' => 'success',
+                'ended_at' => now(),
+                'total_records' => $total,
+                'sent_records' => $sentCount,
+                'failed_records' => $failedCount,
+            ]);
+
+            return self::SUCCESS;
+
+        } catch (\Throwable $e) {
+            $this->error('An error occurred during sync: ' . $e->getMessage());
+            $syncLog->update([
+                'status' => 'failed',
+                'ended_at' => now(),
+                'error_message' => $e->getMessage() . "\n" . $e->getTraceAsString(),
+            ]);
+            return self::FAILURE;
         }
-
-        $this->info("✓ Successfully sent {$sentCount} of {$total} records.");
-
-        if ($failedCount > 0) {
-            $this->warn("⚠ {$failedCount} record(s) were not sent (duplicate or no employee match). Check storage/logs/laravel.log for details.");
-        }
-
-        // ── Persist successful sync timestamp ───────────────────────────────
-        // Store the end-time of this run so the next scheduled run knows
-        // exactly where to pick up from. Keep for 7 days to survive restarts.
-        Cache::put(self::LAST_SYNC_CACHE_KEY, $endTime->toIso8601String(), now()->addDays(7));
-        $this->info('Last-sync timestamp updated: ' . $endTime->toIso8601String());
-        // ───────────────────────────────────────────────────────────────────────
-
-        return self::SUCCESS;
     }
 }
