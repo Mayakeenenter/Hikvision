@@ -11,7 +11,7 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('attendance:sync')
-    ->dailyAt('17:00')
+    ->dailyAt('06:00')
     ->timezone('Asia/Dubai')
     ->withoutOverlapping()
     ->onFailure(function () {
