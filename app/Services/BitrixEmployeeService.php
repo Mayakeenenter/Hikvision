@@ -86,7 +86,29 @@ class BitrixEmployeeService
             return $map[$normalizedTarget];
         }
 
-        // Step 2 — fuzzy match
+        // Step 2 — Unique sub-word containment match
+        $targetWords = array_filter(explode(' ', $normalizedTarget));
+        if (!empty($targetWords)) {
+            $wordMatches = [];
+            foreach ($map as $bitrixName => $id) {
+                $bitrixWords = array_filter(explode(' ', $bitrixName));
+                $allPresent = true;
+                foreach ($targetWords as $tWord) {
+                    if (!in_array($tWord, $bitrixWords, true)) {
+                        $allPresent = false;
+                        break;
+                    }
+                }
+                if ($allPresent) {
+                    $wordMatches[$bitrixName] = $id;
+                }
+            }
+            if (count($wordMatches) === 1) {
+                return reset($wordMatches);
+            }
+        }
+
+        // Step 3 — fuzzy match
         $bestMatch   = null;
         $bestPercent = 0.0;
 
