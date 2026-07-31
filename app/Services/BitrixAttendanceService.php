@@ -62,6 +62,7 @@ class BitrixAttendanceService
             'IBLOCK_ID'      => $this->IBLOCK_ID,
             'ELEMENT_CODE'   => 'event_' . ($eventId ?? uniqid()),
             'FIELDS'         => [
+                'NAME'         => $employeeName . ' (' . $rawStatus . ')',
                 'PROPERTY_229' => $bitrixUserId, // Employee — matched Bitrix24 user ID
                 'PROPERTY_231' => 'Hikvision',   // Source
                 'PROPERTY_233' => $status,        // Event Type (Check-In / Check-Out)
