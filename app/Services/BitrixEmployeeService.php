@@ -131,4 +131,45 @@ class BitrixEmployeeService
 
         return null;
     }
+    /**
+ * Get the full employee list with ID, name, and email — for syncing to the central server.
+ */
+public function getEmployeeListForSync(): array
+{
+    $employees = [];
+    $start = 0;
+
+    do {
+        $response = Http::retry(3, 200)->get($this->webhookUrl . 'user.get', [
+            'FILTER' => ['ACTIVE' => true],
+            'start'  => $start,
+        ]);
+
+        if ($response->failed()) {
+            Log::error('Bitrix24: failed to fetch employee list for sync', ['response' => $response->body()]);
+            break;
+        }
+
+        $data = $response->json();
+
+        foreach ($data['result'] ?? [] as $user) {
+            $fullName = trim(($user['NAME'] ?? '') . ' ' . ($user['LAST_NAME'] ?? ''));
+            $email = $user['EMAIL'] ?? null;
+
+            if ($fullName === '' || empty($email)) {
+                continue;
+            }
+
+            $employees[] = [
+                'employee_id' => (string) $user['ID'],
+                'full_name'   => $fullName,
+                'email'       => $email,
+            ];
+        }
+
+        $start = $data['next'] ?? null;
+    } while ($start !== null);
+
+    return $employees;
+}
 }

@@ -6,13 +6,14 @@ use App\Services\HikvisionService;
 use App\Services\BitrixAttendanceService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
+use App\Services\ServerSyncService;
 
 class SyncHikvisionAttendance extends Command
 {
     // The artisan command name used to run this manually from the terminal
     protected $signature = 'attendance:sync';
 
-    protected $description = 'Fetch attendance records from the Hikvision device and push them to Bitrix24';
+    protected $description = 'Fetch attendance records from the Hikvision device, store them in the database, and push them to Bitrix24';
 
     /**
      * Cache key used to remember when the last successful sync completed.
@@ -21,7 +22,9 @@ class SyncHikvisionAttendance extends Command
      */
     protected const LAST_SYNC_CACHE_KEY = 'hikvision_last_sync_at';
 
-    public function handle(HikvisionService $hikvision, BitrixAttendanceService $bitrix): int
+    public function handle(  HikvisionService $hikvision,
+    BitrixAttendanceService $bitrix,
+    ServerSyncService $serverSync): int
     {
         $this->info('Starting sync...');
 
@@ -70,23 +73,43 @@ class SyncHikvisionAttendance extends Command
                 return self::FAILURE;
             }
 
-            if (empty($events)) {
-                $this->warn('No attendance records found in the given time range.');
-                $syncLog->update([
-                    'status' => 'success',
-                    'ended_at' => now(),
-                    'total_records' => 0,
-                    'sent_records' => 0,
-                    'failed_records' => 0,
-                ]);
-                return self::SUCCESS;
-            }
+           if (empty($events)) {
+    $this->warn('No new attendance records found in the given time range.');
+
+    // Still try to sync any old events that failed previously.
+    $serverResult = $serverSync->syncPendingEvents();
+
+    $this->info(
+        "Server sync: {$serverResult['sent']} sent, " .
+        "{$serverResult['failed']} failed " .
+        "out of {$serverResult['total']} pending events."
+    );
+
+    $syncLog->update([
+        'status' => $serverResult['failed'] > 0 ? 'failed' : 'success',
+        'ended_at' => now(),
+        'total_records' => 0,
+        'sent_records' => $serverResult['sent'],
+        'failed_records' => $serverResult['failed'],
+    ]);
+
+    return $serverResult['failed'] > 0
+        ? self::FAILURE
+        : self::SUCCESS;
+}
 
             $total       = count($events);
             $sentCount   = 0;
             $failedCount = 0;
 
-            $this->info("Fetched {$total} records. Matching and sending to Bitrix24...");
+            $this->info("Fetched {$total} records. Storing to database...");
+
+            // ── Store all events to local database ─────────────────────────────
+            $storeResult = $hikvision->storeEvents($events);
+            $this->info("✓ Stored {$storeResult['stored']} new events ({$storeResult['skipped']} duplicates skipped).");
+            // ───────────────────────────────────────────────────────────────────────
+
+            $this->info("Matching and sending to Bitrix24...");
 
             foreach ($events as $event) {
                 if ($bitrix->sendAttendanceEvent($event)) {
@@ -95,8 +118,25 @@ class SyncHikvisionAttendance extends Command
                     $failedCount++;
                 }
             }
+            // ── Sync unsent events to Bluehost ──────────────────────────────
+$this->info('Sending unsynced events to Bluehost server...');
 
-            $this->info("✓ Successfully sent {$sentCount} of {$total} records.");
+$serverResult = $serverSync->syncPendingEvents();
+
+$this->info(
+    "✓ Server sync: {$serverResult['sent']} sent, " .
+    "{$serverResult['failed']} failed " .
+    "out of {$serverResult['total']} pending events."
+);
+
+if ($serverResult['failed'] > 0) {
+    $this->warn(
+        "⚠ {$serverResult['failed']} event(s) could not be synced to the server. " .
+        "They will be retried on the next sync."
+    );
+}
+// ────────────────────────────────────────────────────────────────
+            $this->info("✓ Successfully sent {$sentCount} of {$total} records to Bitrix24.");
 
             if ($failedCount > 0) {
                 $this->warn("⚠ {$failedCount} record(s) were not sent (duplicate or no employee match). Check storage/logs/laravel.log for details.");

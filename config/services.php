@@ -13,7 +13,10 @@ return [
     | a conventional file to locate the various service credentials.
     |
     */
-
+    'hikvision_sync' => [
+    'url' => env('HIKVISION_SYNC_URL'),
+    'api_key' => env('HIKVISION_SYNC_API_KEY'),
+],
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],
@@ -34,7 +37,7 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
-      'hikvision' => [
+    'hikvision' => [
         'ip'       => env('HIKVISION_DEVICE_IP'),
         'username' => env('HIKVISION_USERNAME'),
         'password' => env('HIKVISION_PASSWORD'),
@@ -43,5 +46,8 @@ return [
     'bitrix24' => [
         'webhook_url' => env('BITRIX24_WEBHOOK_URL'),
     ],
-
+    'employees_sync' => [
+    'url' => env('EMPLOYEES_SYNC_URL'),
+    'api_key' => env('EMPLOYEES_SYNC_API_KEY'),
+],
 ];

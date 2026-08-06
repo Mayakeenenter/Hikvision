@@ -1,0 +1,105 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\HikvisionEvent;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+class ServerSyncService
+{
+    protected string $serverUrl;
+    protected string $apiKey;
+
+    public function __construct()
+    {
+        $this->serverUrl = config('services.hikvision_sync.url');
+        $this->apiKey = config('services.hikvision_sync.api_key');
+    }
+
+    /**
+     * Send one local Hikvision event to the Bluehost server.
+     */
+    public function sendEvent(HikvisionEvent $event): bool
+    {
+        try {
+            $response = Http::timeout(15)
+                ->acceptJson()
+                ->withHeaders([
+                    'X-Api-Key' => $this->apiKey,
+                ])
+                ->post($this->serverUrl, [
+                    'records' => [
+                        [
+                            'event_id'        => $event->event_id,
+                            'employee_id'      => $event->employee_id,
+                            'employee_name'    => $event->employee_name,
+                            'card_number'      => $event->card_number,
+                            'card_reader_id'   => $event->card_reader_id,
+                            'event_type'       => $event->event_type ?? 'Access Control Event',
+                            'sub_type'         => $event->sub_type,
+                            'major_type'       => $event->major_type,
+                            'status_badge'     => $event->status_badge,
+                            'recorded_at'      => $event->recorded_at?->format('Y-m-d H:i:s'),
+                            'event_date'       => $event->recorded_at?->format('Y-m-d'),
+                            'event_time'       => $event->recorded_at?->format('H:i:s'),
+                            'remote_host'      => $event->remote_host,
+                            'raw_payload'      => $event->raw_payload,
+                        ],
+                    ],
+                ]);
+
+            if ($response->successful() && $response->json('success')) {
+                $event->update([
+                    'synced_to_server' => true,
+                ]);
+
+                return true;
+            }
+
+            Log::error('Hikvision server sync failed', [
+                'event_id' => $event->event_id,
+                'status'   => $response->status(),
+                'response' => $response->body(),
+            ]);
+
+            return false;
+
+        } catch (\Throwable $e) {
+
+            Log::error('Hikvision server sync exception', [
+                'event_id' => $event->event_id,
+                'error'    => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
+     * Send all local events that have not been synced yet.
+     */
+    public function syncPendingEvents(): array
+    {
+        $events = HikvisionEvent::where('synced_to_server', false)
+            ->orderBy('id')
+            ->get();
+
+        $sent = 0;
+        $failed = 0;
+
+        foreach ($events as $event) {
+            if ($this->sendEvent($event)) {
+                $sent++;
+            } else {
+                $failed++;
+            }
+        }
+
+        return [
+            'total'  => $events->count(),
+            'sent'   => $sent,
+            'failed' => $failed,
+        ];
+    }
+}
