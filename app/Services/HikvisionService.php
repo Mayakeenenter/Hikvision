@@ -14,9 +14,9 @@ class HikvisionService
 
     public function __construct()
     {
-        $this->deviceIP = config('services.hikvision.ip');
-        $this->username = config('services.hikvision.username');
-        $this->password = config('services.hikvision.password');
+        $this->deviceIP = config('services.hikvision.ip', '') ?? '';
+        $this->username = config('services.hikvision.username', '') ?? '';
+        $this->password = config('services.hikvision.password', '') ?? '';
     }
 
     /**

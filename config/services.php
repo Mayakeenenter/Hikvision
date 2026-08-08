@@ -14,9 +14,9 @@ return [
     |
     */
     'hikvision_sync' => [
-    'url' => env('HIKVISION_SYNC_URL'),
-    'api_key' => env('HIKVISION_SYNC_API_KEY'),
-],
+        'url' => env('HIKVISION_SYNC_URL', ''),
+        'api_key' => env('HIKVISION_SYNC_API_KEY', ''),
+    ],
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],
@@ -38,16 +38,16 @@ return [
         ],
     ],
     'hikvision' => [
-        'ip'       => env('HIKVISION_DEVICE_IP'),
-        'username' => env('HIKVISION_USERNAME'),
-        'password' => env('HIKVISION_PASSWORD'),
+        'ip'       => env('HIKVISION_DEVICE_IP', ''),
+        'username' => env('HIKVISION_USERNAME', ''),
+        'password' => env('HIKVISION_PASSWORD', ''),
     ],
 
     'bitrix24' => [
-        'webhook_url' => env('BITRIX24_WEBHOOK_URL'),
+        'webhook_url' => env('BITRIX24_WEBHOOK_URL', ''),
     ],
     'employees_sync' => [
-    'url' => env('EMPLOYEES_SYNC_URL'),
-    'api_key' => env('EMPLOYEES_SYNC_API_KEY'),
-],
+        'url' => env('EMPLOYEES_SYNC_URL', ''),
+        'api_key' => env('EMPLOYEES_SYNC_API_KEY', ''),
+    ],
 ];

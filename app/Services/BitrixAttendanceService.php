@@ -25,7 +25,7 @@ class BitrixAttendanceService
     public function __construct(
         private readonly BitrixEmployeeService $employeeService
     ) {
-        $this->webhookUrl = config('services.bitrix24.webhook_url');
+        $this->webhookUrl = config('services.bitrix24.webhook_url', '') ?? '';
     }
 
     public function sendAttendanceEvent(array $event): bool

@@ -12,8 +12,8 @@ class EmployeeServerSyncService
 
     public function __construct()
     {
-        $this->serverUrl = config('services.employees_sync.url');
-        $this->apiKey = config('services.employees_sync.api_key');
+        $this->serverUrl = config('services.employees_sync.url', '') ?? '';
+        $this->apiKey = config('services.employees_sync.api_key', '') ?? '';
     }
 
     public function syncAll(BitrixEmployeeService $bitrixService): array

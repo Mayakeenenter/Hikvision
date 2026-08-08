@@ -12,7 +12,7 @@ class BitrixEmployeeService
 
     public function __construct()
     {
-        $this->webhookUrl = config('services.bitrix24.webhook_url');
+        $this->webhookUrl = config('services.bitrix24.webhook_url', '') ?? '';
     }
 
     /**

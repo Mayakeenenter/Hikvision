@@ -13,8 +13,8 @@ class ServerSyncService
 
     public function __construct()
     {
-        $this->serverUrl = config('services.hikvision_sync.url');
-        $this->apiKey = config('services.hikvision_sync.api_key');
+        $this->serverUrl = config('services.hikvision_sync.url', '') ?? '';
+        $this->apiKey = config('services.hikvision_sync.api_key', '') ?? '';
     }
 
     /**
