@@ -46,14 +46,21 @@ class SyncHikvisionAttendance extends Command
 
             // ── Dynamic time window ─────────────────────────────────────────────
             // Read the timestamp of the last successful sync from cache.
-            // If no previous run is recorded (e.g. first run, or cache was cleared)
-            // fall back to 24 hours ago so we don't miss any records.
+            // If no previous run is recorded (e.g. cache cleared), fallback to the
+            // max recorded event in the database (minus 1 hour buffer).
+            // If DB is completely empty, fallback to 30 days ago.
             $lastSyncAt = Cache::get(self::LAST_SYNC_CACHE_KEY);
 
-            $endTime   = now('Asia/Dubai');
-            $startTime = $lastSyncAt
-                ? \Carbon\Carbon::parse($lastSyncAt, 'Asia/Dubai')
-                : $endTime->copy()->subDay();
+            $endTime = now('Asia/Dubai');
+
+            if ($lastSyncAt) {
+                $startTime = \Carbon\Carbon::parse($lastSyncAt, 'Asia/Dubai');
+            } else {
+                $latestDbEvent = \App\Models\HikvisionEvent::max('recorded_at');
+                $startTime = $latestDbEvent
+                    ? \Carbon\Carbon::parse($latestDbEvent, 'Asia/Dubai')->subHour()
+                    : $endTime->copy()->subDays(30);
+            }
 
             $this->info('Sync window: ' . $startTime->toIso8601String() . ' → ' . $endTime->toIso8601String());
 
