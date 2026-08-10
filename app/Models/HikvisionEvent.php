@@ -26,15 +26,25 @@ class HikvisionEvent extends Model
     'remote_host',
     'raw_payload',
     'synced_to_server',
+    'synced_to_bitrix',
 ];
 
  protected $casts = [
-    'recorded_at' => 'datetime',
-    'event_date' => 'date',
-    'raw_payload' => 'array',
+    'recorded_at'      => 'datetime',
+    'event_date'       => 'date',
+    'raw_payload'      => 'array',
     'synced_to_server' => 'boolean',
+    'synced_to_bitrix' => 'boolean',
 ];
 
+
+    /**
+     * Scope: records not yet pushed to Bitrix24.
+     */
+    public function scopeUnsyncedToBitrix($query)
+    {
+        return $query->where('synced_to_bitrix', false);
+    }
 
     /**
      * Scope to search by term (employee name, ID, card number, or event type)

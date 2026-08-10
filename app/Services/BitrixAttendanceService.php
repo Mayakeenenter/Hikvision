@@ -28,6 +28,10 @@ class BitrixAttendanceService
         $this->webhookUrl = config('services.bitrix24.webhook_url', '') ?? '';
     }
 
+    /**
+     * Send a single real-time attendance event (array payload from the webhook listener).
+     * Used by the live event pipeline — keeps existing bool return type for BC.
+     */
     public function sendAttendanceEvent(array $event): bool
     {
         $employeeName = $event['name'] ?? $event['employeeNoString'] ?? 'Unknown';
@@ -57,7 +61,7 @@ class BitrixAttendanceService
         }
         // ───────────────────────────────────────────────────────────────────────
 
-        $response = Http::retry(3, 200)->post($this->webhookUrl . 'lists.element.add', [
+        $response = Http::post($this->webhookUrl . 'lists.element.add', [
             'IBLOCK_TYPE_ID' => $this->IBLOCK_TYPE_ID,
             'IBLOCK_ID'      => $this->IBLOCK_ID,
             'ELEMENT_CODE'   => 'event_' . ($eventId ?? uniqid()),
@@ -86,5 +90,91 @@ class BitrixAttendanceService
         }
 
         return true;
+    }
+
+    // =========================================================================
+    // Batch sync support — used by SyncBitrixAttendanceJob
+    // =========================================================================
+
+    /**
+     * Send a single HikvisionEvent model to Bitrix24 and mark synced_to_bitrix on success.
+     *
+     * Returns a typed result string:
+     *   'sent'         – record added successfully
+     *   'duplicate'    – already in cache, skipped
+     *   'no_employee'  – no Bitrix24 user match found, skipped
+     *   'rate_limited' – Bitrix24 returned 429 (caller should pause)
+     *   'error'        – any other HTTP/server error
+     */
+    public function sendAttendanceRecord(\App\Models\HikvisionEvent $event): string
+    {
+        $employeeName = $event->employee_name ?? 'Unknown';
+        $eventTime    = $event->recorded_at?->toIso8601String() ?? now('Asia/Dubai')->toIso8601String();
+        $rawStatus    = $event->status_badge ?? 'unknown';
+        $status       = $this->statusMap[$rawStatus] ?? (string) $rawStatus;
+        $eventId      = $event->event_id;
+
+        // ── Duplicate check ───────────────────────────────────────────────────
+        if ($eventId && Cache::has("hikvision_sent_{$eventId}")) {
+            Log::info('Bitrix24 batch: skipping already-synced event', ['event_id' => $eventId]);
+            // Keep the DB flag consistent with the cache
+            if (! $event->synced_to_bitrix) {
+                $event->update(['synced_to_bitrix' => true]);
+            }
+            return 'duplicate';
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
+        // ── Employee resolution ───────────────────────────────────────────────
+        $bitrixUserId = $this->employeeService->findEmployeeId($employeeName);
+
+        if ($bitrixUserId === null) {
+            Log::warning('Bitrix24 batch: no matching employee — skipping', [
+                'employee_name' => $employeeName,
+                'event_id'      => $eventId,
+            ]);
+            return 'no_employee';
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
+        $response = Http::timeout(15)->post($this->webhookUrl . 'lists.element.add', [
+            'IBLOCK_TYPE_ID' => $this->IBLOCK_TYPE_ID,
+            'IBLOCK_ID'      => $this->IBLOCK_ID,
+            'ELEMENT_CODE'   => 'event_' . ($eventId ?? uniqid()),
+            'FIELDS'         => [
+                'NAME'         => $employeeName . ' (' . $rawStatus . ')',
+                'PROPERTY_229' => $bitrixUserId, // Employee
+                'PROPERTY_231' => 'Hikvision',   // Source
+                'PROPERTY_233' => $status,        // Event Type
+                'PROPERTY_235' => $eventTime,     // Event Time
+            ],
+        ]);
+
+        // ── Rate-limit detection ──────────────────────────────────────────────
+        if ($response->status() === 429) {
+            Log::warning('Bitrix24 batch: rate limited (429)', ['event_id' => $eventId]);
+            return 'rate_limited';
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
+        if ($response->failed() || isset($response->json()['error'])) {
+            Log::error('Bitrix24 batch: failed to add attendance record', [
+                'employee_name'  => $employeeName,
+                'bitrix_user_id' => $bitrixUserId,
+                'event_id'       => $eventId,
+                'status'         => $response->status(),
+                'response'       => $response->body(),
+            ]);
+            return 'error';
+        }
+
+        // ── Success ───────────────────────────────────────────────────────────
+        $event->update(['synced_to_bitrix' => true]);
+
+        if ($eventId) {
+            Cache::put("hikvision_sent_{$eventId}", true, now()->addHours(48));
+        }
+
+        return 'sent';
     }
 }
