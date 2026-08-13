@@ -23,30 +23,32 @@ class ServerSyncService
     public function sendEvent(HikvisionEvent $event): bool
     {
         try {
+            $recordedAt = $event->recorded_at;
+
+            $record = [
+                'event_id'        => $event->event_id ?? '',
+                'employee_id'     => $event->employee_id ?? '',
+                'employee_name'   => $event->employee_name ?? '',
+                'card_number'     => $event->card_number ?? '',
+                'card_reader_id'  => $event->card_reader_id ?? '',
+                'event_type'      => $event->event_type ?? 'Access Control Event',
+                'sub_type'        => $event->sub_type ?? '',
+                'major_type'      => $event->major_type ?? '',
+                'status_badge'    => $event->status_badge ?? '',
+                'recorded_at'     => $recordedAt?->format('Y-m-d H:i:s') ?? '',
+                'event_date'      => $recordedAt?->format('Y-m-d') ?? ($event->event_date ? $event->event_date->format('Y-m-d') : ''),
+                'event_time'      => $recordedAt?->format('H:i:s') ?? ($event->event_time ?? ''),
+                'remote_host'     => $event->remote_host ?? '',
+                'raw_payload'     => $event->raw_payload ?? [],
+            ];
+
             $response = Http::timeout(15)
                 ->acceptJson()
                 ->withHeaders([
                     'X-Api-Key' => $this->apiKey,
                 ])
                 ->post($this->serverUrl, [
-                    'records' => [
-                        [
-                            'event_id'        => $event->event_id,
-                            'employee_id'      => $event->employee_id,
-                            'employee_name'    => $event->employee_name,
-                            'card_number'      => $event->card_number,
-                            'card_reader_id'   => $event->card_reader_id,
-                            'event_type'       => $event->event_type ?? 'Access Control Event',
-                            'sub_type'         => $event->sub_type,
-                            'major_type'       => $event->major_type,
-                            'status_badge'     => $event->status_badge,
-                            'recorded_at'      => $event->recorded_at?->format('Y-m-d H:i:s'),
-                            'event_date'       => $event->recorded_at?->format('Y-m-d'),
-                            'event_time'       => $event->recorded_at?->format('H:i:s'),
-                            'remote_host'      => $event->remote_host,
-                            'raw_payload'      => $event->raw_payload,
-                        ],
-                    ],
+                    'records' => [$record],
                 ]);
 
             if ($response->successful() && $response->json('success')) {
@@ -61,6 +63,7 @@ class ServerSyncService
                 'event_id' => $event->event_id,
                 'status'   => $response->status(),
                 'response' => $response->body(),
+                'payload'  => $record,
             ]);
 
             return false;
