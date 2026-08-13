@@ -44,6 +44,7 @@ class ServerSyncServiceTest extends TestCase
             'event_id'         => 'srv_ev_02',
             'employee_id'      => '11',
             'employee_name'    => 'Pending User 1',
+            'recorded_at'      => now(),
             'synced_to_server' => false,
         ]);
 

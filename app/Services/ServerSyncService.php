@@ -24,10 +24,28 @@ class ServerSyncService
     {
         try {
             $recordedAt = $event->recorded_at;
+            $eventDate  = $recordedAt?->format('Y-m-d') ?? ($event->event_date ? $event->event_date->format('Y-m-d') : '');
+            $eventTime  = $recordedAt?->format('H:i:s') ?? ($event->event_time ?? '');
+
+            // Remote server (keenenter.com) strictly requires non-empty event_id, employee_id, and event_time
+            if (empty($event->event_id) || empty($event->employee_id) || empty($eventTime)) {
+                Log::warning('Hikvision server sync skipped: missing required fields', [
+                    'event_id'    => $event->event_id,
+                    'employee_id' => $event->employee_id,
+                    'event_time'  => $eventTime,
+                ]);
+
+                // Mark record as synced to prevent infinite retry loops on invalid historical data
+                $event->update([
+                    'synced_to_server' => true,
+                ]);
+
+                return false;
+            }
 
             $record = [
-                'event_id'        => $event->event_id ?? '',
-                'employee_id'     => $event->employee_id ?? '',
+                'event_id'        => $event->event_id,
+                'employee_id'     => $event->employee_id,
                 'employee_name'   => $event->employee_name ?? '',
                 'card_number'     => $event->card_number ?? '',
                 'card_reader_id'  => $event->card_reader_id ?? '',
@@ -36,8 +54,8 @@ class ServerSyncService
                 'major_type'      => $event->major_type ?? '',
                 'status_badge'    => $event->status_badge ?? '',
                 'recorded_at'     => $recordedAt?->format('Y-m-d H:i:s') ?? '',
-                'event_date'      => $recordedAt?->format('Y-m-d') ?? ($event->event_date ? $event->event_date->format('Y-m-d') : ''),
-                'event_time'      => $recordedAt?->format('H:i:s') ?? ($event->event_time ?? ''),
+                'event_date'      => $eventDate,
+                'event_time'      => $eventTime,
                 'remote_host'     => $event->remote_host ?? '',
                 'raw_payload'     => $event->raw_payload ?? [],
             ];
