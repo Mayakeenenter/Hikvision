@@ -79,25 +79,26 @@ class ServerSyncService
     /**
      * Send all local events that have not been synced yet.
      */
-    public function syncPendingEvents(): array
+    public function syncPendingEvents(int $chunkSize = 100): array
     {
-        $events = HikvisionEvent::where('synced_to_server', false)
-            ->orderBy('id')
-            ->get();
+        $query = HikvisionEvent::where('synced_to_server', false);
+        $total = (clone $query)->count();
 
         $sent = 0;
         $failed = 0;
 
-        foreach ($events as $event) {
-            if ($this->sendEvent($event)) {
-                $sent++;
-            } else {
-                $failed++;
+        (clone $query)->orderBy('id')->chunkById($chunkSize, function ($events) use (&$sent, &$failed) {
+            foreach ($events as $event) {
+                if ($this->sendEvent($event)) {
+                    $sent++;
+                } else {
+                    $failed++;
+                }
             }
-        }
+        });
 
         return [
-            'total'  => $events->count(),
+            'total'  => $total,
             'sent'   => $sent,
             'failed' => $failed,
         ];
