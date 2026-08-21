@@ -107,7 +107,8 @@ class ServerSyncService
             ->orderBy('id')
             ->get();
 
-        $sent = 0;
+        $total  = $events->count();
+        $sent   = 0;
         $failed = 0;
 
         foreach ($events as $event) {
