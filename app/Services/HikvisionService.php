@@ -175,27 +175,111 @@ class HikvisionService
     /**
      * Resolve a human-readable event type string from the raw event payload.
      */
-    protected function resolveEventType(array $event): string
+    public function resolveEventType(array $event): string
     {
+        // 1. Check attendanceStatus if explicitly provided by device
+        $attendanceStatus = $event['attendanceStatus'] ?? null;
+        if ($attendanceStatus !== null) {
+            $attStatusStr = is_string($attendanceStatus) ? strtolower($attendanceStatus) : (string) $attendanceStatus;
+            $mappedAtt = match ($attStatusStr) {
+                '0', 'checkin', 'check_in', 'check in'       => 'Check In',
+                '1', 'checkout', 'check_out', 'check out'     => 'Check Out',
+                '2', 'breakout', 'break_out', 'break out'     => 'Break Out',
+                '3', 'breakin', 'break_in', 'break in'        => 'Break In',
+                '4', 'overtimein', 'overtime_in'             => 'Overtime In',
+                '5', 'overtimeout', 'overtime_out'           => 'Overtime Out',
+                default                                       => null,
+            };
+            if ($mappedAtt !== null) {
+                return $mappedAtt;
+            }
+        }
+
         $major = (int) ($event['major'] ?? $event['majorType'] ?? -1);
         $minor = (int) ($event['minor'] ?? $event['subType'] ?? -1);
 
         // Access Control major = 5
         if ($major === 5) {
             return match ($minor) {
-                75  => 'Authenticated',
-                76  => 'Authentication Failed',
-                82  => 'Door Open',
-                83  => 'Door Closed',
-                84  => 'Exit Button Released',
-                85  => 'Exit Button Pressed',
-                default => 'Access Control Event',
+                // Attendance
+                101 => 'Check In',
+                102 => 'Check Out',
+                103 => 'Break Out',
+                104 => 'Break In',
+                105 => 'Overtime In',
+                106 => 'Overtime Out',
+
+                // Authentication Pass
+                1, 5, 6, 16, 18, 20, 23, 33, 36, 39, 75, 77, 112, 113, 118 => 'Authenticated',
+
+                // Authentication Failed / Invalid
+                2, 3, 4, 7, 8, 9, 17, 19, 21, 22, 24, 25, 34, 35, 37, 38, 40, 41, 76 => 'Authentication Failed',
+
+                // Door Open / Closed / Exit Button
+                82, 87, 89, 91, 97 => 'Door Open',
+                83, 88, 90, 92, 98 => 'Door Closed',
+                84                 => 'Exit Button Released',
+                85                 => 'Exit Button Pressed',
+                86                 => 'Door Trailing',
+
+                // Alarms & Exceptions
+                121 => 'Stress Alarm',
+                122 => 'Device Tamper Alarm',
+                123 => 'Door Open Timeout',
+                124 => 'Unauthorized Open Door',
+                125 => 'Door Forced Open',
+                128 => 'Free Passing',
+
+                // Intercom
+                115 => 'Intercom Calling',
+                116 => 'Intercom Ringing',
+                117 => 'Intercom Hanging Up',
+
+                default => null,
+            } ?? $this->resolveFallbackType($event);
+        }
+
+        // Alarm major = 1
+        if ($major === 1) {
+            return match ($minor) {
+                121 => 'Stress Alarm',
+                122 => 'Device Tamper Alarm',
+                123 => 'Door Open Timeout',
+                124 => 'Unauthorized Open Door',
+                125 => 'Door Forced Open',
+                default => 'Alarm Event',
             };
         }
 
-        // Fallback: use raw subType string if available
-        if (!empty($event['subType']) && is_string($event['subType'])) {
-            return ucwords(str_replace(['_', '-'], ' ', $event['subType']));
+        return $this->resolveFallbackType($event);
+    }
+
+    /**
+     * Fallback resolution using textual fields if major/minor code didn't match.
+     */
+    protected function resolveFallbackType(array $event): string
+    {
+        $rawType = $event['eventDescription'] 
+            ?? $event['subType'] 
+            ?? $event['minorType'] 
+            ?? $event['type'] 
+            ?? $event['label'] 
+            ?? null;
+
+        if (!empty($rawType) && is_string($rawType)) {
+            $normalized = strtolower(trim($rawType));
+            return match (true) {
+                str_contains($normalized, 'checkin') || str_contains($normalized, 'check in')   => 'Check In',
+                str_contains($normalized, 'checkout') || str_contains($normalized, 'check out') => 'Check Out',
+                str_contains($normalized, 'auth fail') || str_contains($normalized, 'invalid')  => 'Authentication Failed',
+                str_contains($normalized, 'auth') || str_contains($normalized, 'pass')          => 'Authenticated',
+                str_contains($normalized, 'door open') || str_contains($normalized, 'dooropen') => 'Door Open',
+                str_contains($normalized, 'door close') || str_contains($normalized, 'doorclosed') => 'Door Closed',
+                str_contains($normalized, 'button release')                                     => 'Exit Button Released',
+                str_contains($normalized, 'button press') || str_contains($normalized, 'exit button') => 'Exit Button Pressed',
+                str_contains($normalized, 'alarm') || str_contains($normalized, 'tamper')       => 'Alarm Event',
+                default => ucwords(str_replace(['_', '-'], ' ', $rawType)),
+            };
         }
 
         return 'Access Control Event';
@@ -204,25 +288,38 @@ class HikvisionService
     /**
      * Resolve a short badge status from the event for visual classification.
      */
-    protected function resolveStatusBadge(array $event): string
+    public function resolveStatusBadge(array $event): string
     {
-        $minor = (int) ($event['minor'] ?? $event['subType'] ?? -1);
         $attendanceStatus = $event['attendanceStatus'] ?? null;
-
         if ($attendanceStatus !== null) {
-            return match ((int) $attendanceStatus) {
-                0       => 'checkIn',
-                1       => 'checkOut',
-                default => 'access',
+            $attStatusStr = is_string($attendanceStatus) ? strtolower($attendanceStatus) : (string) $attendanceStatus;
+            return match ($attStatusStr) {
+                '0', 'checkin', 'check_in', 'check in'       => 'checkIn',
+                '1', 'checkout', 'check_out', 'check out'     => 'checkOut',
+                '2', 'breakout', 'break_out', 'break out'     => 'break',
+                '3', 'breakin', 'break_in', 'break in'        => 'break',
+                '4', 'overtimein', 'overtime_in'             => 'checkIn',
+                '5', 'overtimeout', 'overtime_out'           => 'checkOut',
+                default                                       => 'access',
             };
         }
 
+        $major = (int) ($event['major'] ?? $event['majorType'] ?? -1);
+        $minor = (int) ($event['minor'] ?? $event['subType'] ?? -1);
+
+        if ($major === 1 || in_array($minor, [121, 122, 123, 124, 125], true)) {
+            return 'alarm';
+        }
+
         return match ($minor) {
-            75  => 'authenticated',
-            76  => 'failed',
-            82  => 'doorOpen',
-            83  => 'doorClosed',
-            84, 85 => 'exitButton',
+            101                                                                    => 'checkIn',
+            102                                                                    => 'checkOut',
+            103, 104                                                               => 'break',
+            1, 5, 6, 16, 18, 20, 23, 33, 36, 39, 75, 77, 112, 113, 118             => 'authenticated',
+            2, 3, 4, 7, 8, 9, 17, 19, 21, 22, 24, 25, 34, 35, 37, 38, 40, 41, 76 => 'failed',
+            82, 87, 89, 91, 97                                                     => 'doorOpen',
+            83, 88, 90, 92, 98                                                     => 'doorClosed',
+            84, 85                                                                 => 'exitButton',
             default => 'access',
         };
     }

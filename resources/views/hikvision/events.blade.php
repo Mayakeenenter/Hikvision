@@ -607,6 +607,12 @@
             flex-shrink: 0;
         }
 
+        .badge-checkIn       { background: rgba(16,185,129,0.12); color: #10b981; border: 1px solid rgba(16,185,129,0.25); }
+        .badge-checkIn .badge-dot { background: #10b981; }
+
+        .badge-checkOut      { background: rgba(99,102,241,0.12); color: #818cf8; border: 1px solid rgba(99,102,241,0.25); }
+        .badge-checkOut .badge-dot { background: #818cf8; }
+
         .badge-authenticated { background: var(--green-bg);  color: var(--green);  border: 1px solid rgba(34,197,94,0.2); }
         .badge-authenticated .badge-dot { background: var(--green); }
 
@@ -622,8 +628,66 @@
         .badge-exitButton    { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(249,115,22,0.2); }
         .badge-exitButton .badge-dot { background: var(--orange); }
 
+        .badge-break         { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(245,158,11,0.25); }
+        .badge-break .badge-dot { background: var(--yellow); }
+
+        .badge-alarm         { background: rgba(244,63,94,0.12); color: #f43f5e; border: 1px solid rgba(244,63,94,0.25); }
+        .badge-alarm .badge-dot { background: #f43f5e; }
+
         .badge-access        { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(168,85,247,0.2); }
         .badge-access .badge-dot { background: var(--purple); }
+
+        /* Quick Filter Chips */
+        .filter-chips {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 6px;
+            margin-bottom: 20px;
+        }
+        .filter-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            font-size: 12.5px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .filter-chip:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border-color: var(--border-strong);
+        }
+        .filter-chip.active {
+            background: rgba(79,142,247,0.15);
+            color: var(--accent-light);
+            border-color: var(--accent);
+            font-weight: 600;
+        }
+        .filter-chip-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 18px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .filter-chip.active .filter-chip-count {
+            background: var(--accent);
+            color: #fff;
+        }
 
         /* ═══════════════════════════════════════════════
            DATE / TIME
@@ -810,70 +874,104 @@
         {{-- TOP BAR --}}
         <header class="topbar">
             <div class="topbar-left">
-                <h1>Hikvision Event</h1>
-                <p>Access Control Events &mdash; Real-time Monitoring</p>
+                <h1>Hikvision Event Dashboard</h1>
+                <p>Real-time Access Control, Attendance & Door Events</p>
             </div>
-            <!-- <div class="topbar-right">
+            <div class="topbar-right">
                 <span class="topbar-time" id="live-clock"></span>
                 <a href="{{ route('events.index') }}" class="btn btn-ghost btn-sm">
                     🔄 Refresh
                 </a>
-            </div> -->
+            </div>
         </header>
 
         {{-- PAGE BODY --}}
         <main class="page-body">
 
             {{-- STATS GRID --}}
-            <!-- <div class="stats-grid">
+            <div class="stats-grid">
                 <div class="stat-card blue">
                     <div class="stat-header">
                         <div>
                             <div class="stat-value">{{ number_format($totalEvents) }}</div>
                             <div class="stat-label">Total Events</div>
-                            <div class="stat-sub">All recorded access events</div>
+                            <div class="stat-sub">All recorded access & door events</div>
                         </div>
-                        <div class="stat-icon blue">📋</div>
+                        <div class="stat-icon blue">📊</div>
                     </div>
                 </div>
 
                 <div class="stat-card green">
                     <div class="stat-header">
                         <div>
-                            <div class="stat-value">{{ number_format($activeEmployees) }}</div>
-                            <div class="stat-label">Active Employees</div>
-                            <div class="stat-sub">Unique identified employees</div>
+                            <div class="stat-value">{{ number_format($authenticatedIn) }}</div>
+                            <div class="stat-label">Authentications</div>
+                            <div class="stat-sub">Face / Card / Fingerprint passes</div>
                         </div>
-                        <div class="stat-icon green">👥</div>
+                        <div class="stat-icon green">🔐</div>
                     </div>
                 </div>
 
                 <div class="stat-card purple">
                     <div class="stat-header">
                         <div>
-                            <div class="stat-value">{{ number_format($authenticatedIn) }}</div>
-                            <div class="stat-label">Authentications</div>
-                            <div class="stat-sub">Successful access events</div>
+                            <div class="stat-value">{{ number_format($checkInCount + $checkOutCount) }}</div>
+                            <div class="stat-label">Check In / Out</div>
+                            <div class="stat-sub">{{ number_format($checkInCount) }} In &bull; {{ number_format($checkOutCount) }} Out</div>
                         </div>
-                        <div class="stat-icon purple">🔐</div>
+                        <div class="stat-icon purple">⏱️</div>
                     </div>
                 </div>
 
                 <div class="stat-card orange">
                     <div class="stat-header">
                         <div>
-                            <div class="stat-value">{{ number_format($todayEvents) }}</div>
-                            <div class="stat-label">Today's Events</div>
-                            <div class="stat-sub">{{ now()->format('d M Y') }}</div>
+                            <div class="stat-value">{{ number_format($doorOpenCount + $doorClosedCount + $exitButtonCount) }}</div>
+                            <div class="stat-label">Door & Button Activity</div>
+                            <div class="stat-sub">{{ number_format($doorOpenCount) }} Open &bull; {{ number_format($doorClosedCount) }} Closed</div>
                         </div>
-                        <div class="stat-icon orange">📅</div>
+                        <div class="stat-icon orange">🚪</div>
                     </div>
                 </div>
-            </div> -->
+            </div>
+
+            {{-- QUICK FILTER CHIPS --}}
+            <div class="filter-chips">
+                <a href="{{ route('events.index') }}" class="filter-chip {{ !request()->hasAny(['badge', 'event_type']) ? 'active' : '' }}">
+                    All Events <span class="filter-chip-count">{{ number_format($totalEvents) }}</span>
+                </a>
+                <a href="{{ route('events.index', array_merge(request()->except(['badge', 'page']), ['badge' => 'authenticated'])) }}" class="filter-chip {{ request('badge') === 'authenticated' ? 'active' : '' }}">
+                    🔐 Authenticated <span class="filter-chip-count">{{ number_format($authenticatedIn) }}</span>
+                </a>
+                <a href="{{ route('events.index', array_merge(request()->except(['badge', 'page']), ['badge' => 'checkIn'])) }}" class="filter-chip {{ request('badge') === 'checkIn' ? 'active' : '' }}">
+                    📥 Check In <span class="filter-chip-count">{{ number_format($checkInCount) }}</span>
+                </a>
+                <a href="{{ route('events.index', array_merge(request()->except(['badge', 'page']), ['badge' => 'checkOut'])) }}" class="filter-chip {{ request('badge') === 'checkOut' ? 'active' : '' }}">
+                    📤 Check Out <span class="filter-chip-count">{{ number_format($checkOutCount) }}</span>
+                </a>
+                <a href="{{ route('events.index', array_merge(request()->except(['badge', 'page']), ['badge' => 'doorOpen'])) }}" class="filter-chip {{ request('badge') === 'doorOpen' ? 'active' : '' }}">
+                    🚪 Door Open <span class="filter-chip-count">{{ number_format($doorOpenCount) }}</span>
+                </a>
+                <a href="{{ route('events.index', array_merge(request()->except(['badge', 'page']), ['badge' => 'doorClosed'])) }}" class="filter-chip {{ request('badge') === 'doorClosed' ? 'active' : '' }}">
+                    🔒 Door Closed <span class="filter-chip-count">{{ number_format($doorClosedCount) }}</span>
+                </a>
+                <a href="{{ route('events.index', array_merge(request()->except(['badge', 'page']), ['badge' => 'exitButton'])) }}" class="filter-chip {{ request('badge') === 'exitButton' ? 'active' : '' }}">
+                    🔘 Exit Button <span class="filter-chip-count">{{ number_format($exitButtonCount) }}</span>
+                </a>
+                @if($failedCount > 0 || $alarmCount > 0)
+                    <a href="{{ route('events.index', array_merge(request()->except(['badge', 'page']), ['badge' => 'failed'])) }}" class="filter-chip {{ request('badge') === 'failed' ? 'active' : '' }}">
+                        ⚠️ Failed / Alarms <span class="filter-chip-count">{{ number_format($failedCount + $alarmCount) }}</span>
+                    </a>
+                @endif
+            </div>
 
             {{-- FILTER BAR --}}
             <div class="filter-bar">
                 <form method="GET" action="{{ route('events.index') }}">
+                    @if(request('badge'))
+                        <input type="hidden" name="badge" value="{{ request('badge') }}">
+                    @endif
+
                     {{-- Search --}}
                     <div class="filter-group search-wrapper">
                         <div class="search-icon-wrap" style="position:relative;flex:1">
@@ -893,7 +991,7 @@
                     <div class="filter-group" style="min-width:200px">
                         <label class="filter-label" for="filter-event-type">Type</label>
                         <select id="filter-event-type" name="event_type" class="form-control">
-                            <option value="">All Types</option>
+                            <option value="">All Event Types</option>
                             @foreach($eventTypes as $type)
                                 <option value="{{ $type }}" @selected(request('event_type') === $type)>
                                     {{ $type }}
@@ -925,7 +1023,7 @@
 
                     <div class="filter-actions">
                         <button id="filter-apply-btn" type="submit" class="btn btn-primary btn-sm">Apply</button>
-                        @if(request()->hasAny(['search','event_type','date_from','date_to']))
+                        @if(request()->hasAny(['search','event_type','badge','date_from','date_to']))
                             <a href="{{ route('events.index') }}" class="btn btn-ghost btn-sm">Clear</a>
                         @endif
                     </div>
@@ -938,11 +1036,11 @@
                     <div>
                         <div class="table-title">
                             Access Events
-                            <span class="table-count">{{ $events->total() }}</span>
+                            <span class="table-count">{{ number_format($events->total()) }}</span>
                         </div>
                         <div class="table-meta">
-                            @if(request()->hasAny(['search','event_type','date_from','date_to']))
-                                Filtered results
+                            @if(request()->hasAny(['search','event_type','badge','date_from','date_to']))
+                                Filtered results &bull; sorted by most recent
                             @else
                                 All records, sorted by most recent
                             @endif

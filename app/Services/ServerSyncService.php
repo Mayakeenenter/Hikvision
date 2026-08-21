@@ -78,26 +78,29 @@ class ServerSyncService
 
     /**
      * Send all local events that have not been synced yet.
+     * Uses chunk() to avoid loading all records into memory at once.
      */
     public function syncPendingEvents(): array
     {
-        $events = HikvisionEvent::where('synced_to_server', false)
-            ->orderBy('id')
-            ->get();
-
-        $sent = 0;
+        $total  = 0;
+        $sent   = 0;
         $failed = 0;
 
-        foreach ($events as $event) {
-            if ($this->sendEvent($event)) {
-                $sent++;
-            } else {
-                $failed++;
-            }
-        }
+        HikvisionEvent::where('synced_to_server', false)
+            ->orderBy('id')
+            ->chunk(100, function ($events) use (&$total, &$sent, &$failed) {
+                foreach ($events as $event) {
+                    $total++;
+                    if ($this->sendEvent($event)) {
+                        $sent++;
+                    } else {
+                        $failed++;
+                    }
+                }
+            });
 
         return [
-            'total'  => $events->count(),
+            'total'  => $total,
             'sent'   => $sent,
             'failed' => $failed,
         ];

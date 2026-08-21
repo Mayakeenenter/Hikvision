@@ -25,6 +25,20 @@ class SeedHikvisionEvents extends Command
 
     protected array $eventScenarios = [
         [
+            'event_type'   => 'Check In',
+            'status_badge' => 'checkIn',
+            'major_type'   => 5,
+            'sub_type'     => 101,
+            'has_employee' => true,
+        ],
+        [
+            'event_type'   => 'Check Out',
+            'status_badge' => 'checkOut',
+            'major_type'   => 5,
+            'sub_type'     => 102,
+            'has_employee' => true,
+        ],
+        [
             'event_type'   => 'Authenticated',
             'status_badge' => 'authenticated',
             'major_type'   => 5,
@@ -65,6 +79,13 @@ class SeedHikvisionEvents extends Command
             'major_type'   => 5,
             'sub_type'     => 76,
             'has_employee' => true,
+        ],
+        [
+            'event_type'   => 'Door Open Timeout',
+            'status_badge' => 'alarm',
+            'major_type'   => 1,
+            'sub_type'     => 123,
+            'has_employee' => false,
         ],
     ];
 
